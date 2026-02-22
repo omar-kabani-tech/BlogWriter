@@ -9,7 +9,6 @@ import {
   FileText, 
   PlusCircle, 
   Search, 
-  Bell, 
   User, 
   MoreVertical,
   ChevronRight,
@@ -334,10 +333,6 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <button className="p-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors relative">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
             <button 
               onClick={() => setCurrentScreen('new-post')}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
