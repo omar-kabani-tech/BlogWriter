@@ -19,4 +19,4 @@ export interface BlogPost {
   updatedAt: string;
 }
 
-export type Screen = 'dashboard' | 'posts' | 'new-post' | 'edit-post' | 'categories' | 'calendar';
+export type Screen = 'dashboard' | 'posts' | 'new-post' | 'edit-post' | 'categories' | 'calendar' | 'ai-generator';

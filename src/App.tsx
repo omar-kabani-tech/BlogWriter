@@ -26,11 +26,14 @@ import {
   Calendar as CalendarIcon,
   ChevronLeft,
   Filter,
-  CalendarDays
+  CalendarDays,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { GoogleGenAI, Type } from "@google/genai";
 import { 
   format, 
   startOfMonth, 
@@ -118,11 +121,16 @@ export default function App() {
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<{ start: string, end: string }>({ start: '', end: '' });
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // All unique tags for filter
   const allTags = useMemo(() => {
     const tags = new Set<string>();
-    posts.forEach(p => p.tags.forEach(t => tags.add(t)));
+    posts.forEach(p => {
+      if (p.tags && Array.isArray(p.tags)) {
+        p.tags.forEach(t => tags.add(t));
+      }
+    });
     return Array.from(tags);
   }, [posts]);
 
@@ -135,10 +143,22 @@ export default function App() {
     };
   }, [posts]);
 
-  const handleCreatePost = (newPost: Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleCreatePost = (newPost: Partial<BlogPost>) => {
     const post: BlogPost = {
-      ...newPost,
       id: Math.random().toString(36).substr(2, 9),
+      title: newPost.title || 'Untitled Post',
+      content: newPost.content || '',
+      status: (newPost.status as PostStatus) || 'draft',
+      category: newPost.category || categories[0] || 'Uncategorized',
+      tags: Array.isArray(newPost.tags) ? newPost.tags : [],
+      featuredImage: newPost.featuredImage,
+      seo: newPost.seo || {
+        metaTitle: '',
+        metaDescription: '',
+        focusKeyword: '',
+        slug: ''
+      },
+      scheduledAt: newPost.scheduledAt || format(new Date(), 'yyyy-MM-dd'),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -171,19 +191,22 @@ export default function App() {
 
   const filteredPosts = posts.filter(post => {
     const query = searchQuery.toLowerCase();
-    const matchesSearch = post.title.toLowerCase().includes(query) || 
-                         post.content.toLowerCase().includes(query);
+    const title = (post.title || '').toLowerCase();
+    const content = (post.content || '').toLowerCase();
+    
+    const matchesSearch = title.includes(query) || content.includes(query);
     const matchesStatus = statusFilter === 'all' || post.status === statusFilter;
     const matchesCategory = categoryFilter === 'All' || post.category === categoryFilter;
     
     // Date range filter
-    const postDate = new Date(post.createdAt);
+    const postDate = new Date(post.createdAt || new Date());
     const matchesStartDate = !dateRange.start || postDate >= new Date(dateRange.start);
     const matchesEndDate = !dateRange.end || postDate <= new Date(dateRange.end);
     
     // Multiple tags filter (must have all selected tags)
+    const postTags = Array.isArray(post.tags) ? post.tags : [];
     const matchesTags = selectedTags.length === 0 || 
-                       selectedTags.every(tag => post.tags.includes(tag));
+                       selectedTags.every(tag => postTags.includes(tag));
 
     return matchesSearch && matchesStatus && matchesCategory && matchesStartDate && matchesEndDate && matchesTags;
   });
@@ -191,58 +214,97 @@ export default function App() {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-right border-slate-200 flex flex-col">
-        <div className="p-6 border-bottom border-slate-100">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+      <aside className={cn(
+        "bg-white border-right border-slate-200 flex flex-col transition-all duration-300 ease-in-out relative",
+        isSidebarCollapsed ? "w-20" : "w-64"
+      )}>
+        <div className={cn(
+          "p-6 border-bottom border-slate-100 flex items-center justify-between",
+          isSidebarCollapsed && "px-4"
+        )}>
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex-shrink-0 flex items-center justify-center">
               <FileEdit className="text-white w-5 h-5" />
             </div>
-            <h1 className="font-bold text-xl tracking-tight text-slate-900">BlogWriter AI</h1>
+            {!isSidebarCollapsed && (
+              <motion.h1 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="font-bold text-xl tracking-tight text-slate-900 whitespace-nowrap"
+              >
+                BlogWriter AI
+              </motion.h1>
+            )}
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        {/* Collapse Toggle Button */}
+        <button 
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className="absolute -right-3 top-20 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-200 shadow-sm z-50 transition-all"
+        >
+          {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-hide">
           <NavItem 
             icon={<LayoutDashboard size={20} />} 
             label="Dashboard" 
             active={currentScreen === 'dashboard'} 
             onClick={() => setCurrentScreen('dashboard')} 
+            collapsed={isSidebarCollapsed}
           />
           <NavItem 
             icon={<FileText size={20} />} 
             label="Blog Posts" 
             active={currentScreen === 'posts'} 
             onClick={() => setCurrentScreen('posts')} 
+            collapsed={isSidebarCollapsed}
           />
           <NavItem 
             icon={<PlusCircle size={20} />} 
             label="New Post" 
             active={currentScreen === 'new-post'} 
             onClick={() => setCurrentScreen('new-post')} 
+            collapsed={isSidebarCollapsed}
           />
           <NavItem 
             icon={<Tags size={20} />} 
             label="Categories" 
             active={currentScreen === 'categories'} 
             onClick={() => setCurrentScreen('categories')} 
+            collapsed={isSidebarCollapsed}
           />
           <NavItem 
             icon={<CalendarIcon size={20} />} 
             label="Calendar" 
             active={currentScreen === 'calendar'} 
             onClick={() => setCurrentScreen('calendar')} 
+            collapsed={isSidebarCollapsed}
+          />
+          <NavItem 
+            icon={<Sparkles size={20} />} 
+            label="AI Generator" 
+            active={currentScreen === 'ai-generator'} 
+            onClick={() => setCurrentScreen('ai-generator')} 
+            collapsed={isSidebarCollapsed}
           />
         </nav>
 
         <div className="p-4 border-top border-slate-100">
-          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
-            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
+          <div className={cn(
+            "flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors overflow-hidden",
+            isSidebarCollapsed && "justify-center px-0"
+          )}>
+            <div className="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center">
               <User size={20} className="text-slate-500" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-900 truncate">Alex Writer</p>
-              <p className="text-xs text-slate-500 truncate">Editor-in-Chief</p>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-900 truncate">Alex Writer</p>
+                <p className="text-xs text-slate-500 truncate">Editor-in-Chief</p>
+              </div>
+            )}
           </div>
         </div>
       </aside>
@@ -351,6 +413,15 @@ export default function App() {
                 onEdit={handleEditPost}
               />
             )}
+            {currentScreen === 'ai-generator' && (
+              <AIGeneratorScreen 
+                key="ai-generator"
+                categories={categories}
+                onAccept={(post) => {
+                  handleCreatePost(post);
+                }}
+              />
+            )}
           </AnimatePresence>
         </div>
       </main>
@@ -358,19 +429,21 @@ export default function App() {
   );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active?: boolean, onClick: () => void }) {
+function NavItem({ icon, label, active, onClick, collapsed }: { icon: React.ReactNode, label: string, active?: boolean, onClick: () => void, collapsed?: boolean }) {
   return (
     <button 
       onClick={onClick}
+      title={collapsed ? label : undefined}
       className={cn(
         "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all",
         active 
           ? "bg-indigo-50 text-indigo-700" 
-          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+        collapsed && "justify-center px-0"
       )}
     >
-      <span className={cn(active ? "text-indigo-600" : "text-slate-400")}>{icon}</span>
-      {label}
+      <span className={cn("flex-shrink-0", active ? "text-indigo-600" : "text-slate-400")}>{icon}</span>
+      {!collapsed && <span className="truncate">{label}</span>}
     </button>
   );
 }
@@ -430,8 +503,8 @@ function DashboardScreen({ stats, recentPosts, onEdit }: { stats: any, recentPos
                   {post.status === 'published' ? <CheckCircle2 size={20} /> : <Clock size={20} />}
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-slate-900">{post.title}</h4>
-                  <p className="text-xs text-slate-500">{format(new Date(post.createdAt), 'MMM d, yyyy')}</p>
+                  <h4 className="text-sm font-medium text-slate-900">{post.title || 'Untitled Post'}</h4>
+                  <p className="text-xs text-slate-500">{format(new Date(post.createdAt || new Date()), 'MMM d, yyyy')}</p>
                 </div>
               </div>
               <ChevronRight size={18} className="text-slate-300" />
@@ -712,9 +785,9 @@ function PostsScreen({
                   </div>
                 </td>
                 <td className="px-6 py-4 cursor-pointer" onClick={() => onEdit(post.id)}>
-                  <div className="font-medium text-slate-900">{post.title}</div>
+                  <div className="font-medium text-slate-900">{post.title || 'Untitled Post'}</div>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {post.tags.map(tag => (
+                    {(post.tags || []).map(tag => (
                       <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">#{tag}</span>
                     ))}
                   </div>
@@ -730,7 +803,7 @@ function PostsScreen({
                       : "bg-amber-50 text-amber-700 border border-amber-100"
                   )}>
                     <span className={cn("w-1.5 h-1.5 rounded-full", post.status === 'published' ? "bg-emerald-500" : "bg-amber-500")}></span>
-                    {post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+                    {post.status ? (post.status.charAt(0).toUpperCase() + post.status.slice(1)) : 'Draft'}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-sm text-slate-500">
@@ -791,6 +864,102 @@ function PostFormScreen({
     slug: post?.seo?.slug || ''
   });
   const [isPreview, setIsPreview] = useState(false);
+  const [isGeneratingMeta, setIsGeneratingMeta] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  const handleGenerateImage = async () => {
+    if (!title.trim()) {
+      alert("Please provide a title first to generate a relevant image.");
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: {
+          parts: [
+            {
+              text: `Generate a high-quality, professional featured image for a blog post titled: "${title}". 
+              The image should be visually appealing, modern, and relevant to the topic. 
+              Avoid text in the image. Style: Professional photography or high-end digital illustration.`,
+            },
+          ],
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: "16:9",
+          },
+        },
+      });
+
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData) {
+            const base64EncodeString = part.inlineData.data;
+            setFeaturedImage(`data:image/png;base64,${base64EncodeString}`);
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Image generation failed:", error);
+      alert("Failed to generate image.");
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const handleGenerateMeta = async () => {
+    if (!title.trim() || !content.trim()) {
+      alert("Please provide a title and some content first.");
+      return;
+    }
+    
+    setIsGeneratingMeta(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Analyze this blog post and generate SEO metadata.
+        Title: ${title}
+        Content: ${content}
+        
+        Requirements for SEO metadata:
+        - metaTitle: Length must be between 50 and 60 characters.
+        - metaDescription: Length must be between 50 and 160 characters (ideally 155-160).
+        
+        Return a JSON object with: metaTitle, metaDescription, focusKeyword, slug.`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              metaTitle: { type: Type.STRING },
+              metaDescription: { type: Type.STRING },
+              focusKeyword: { type: Type.STRING },
+              slug: { type: Type.STRING }
+            },
+            required: ["metaTitle", "metaDescription", "focusKeyword", "slug"]
+          }
+        }
+      });
+
+      const data = JSON.parse(response.text || '{}');
+      setSeo({
+        metaTitle: data.metaTitle || '',
+        metaDescription: data.metaDescription || '',
+        focusKeyword: data.focusKeyword || '',
+        slug: data.slug || ''
+      });
+    } catch (error) {
+      console.error("Meta generation failed:", error);
+      alert("Failed to generate SEO metadata.");
+    } finally {
+      setIsGeneratingMeta(false);
+    }
+  };
 
   const handleSubmit = (status: PostStatus) => {
     if (!title.trim() || !content.trim()) return;
@@ -858,6 +1027,71 @@ function PostFormScreen({
           </button>
         </div>
       </div>
+
+      {/* AI Agents Panel */}
+      {!isPreview && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* AI Meta Agent */}
+          <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg border border-slate-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Globe size={20} className="text-indigo-400" />
+                <h3 className="font-semibold">AI SEO Agent</h3>
+              </div>
+              <button 
+                onClick={handleGenerateMeta}
+                disabled={isGeneratingMeta}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isGeneratingMeta ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    Optimize Metadata
+                  </>
+                )}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              Let the AI analyze your content to generate the perfect meta title, description, and focus keywords.
+            </p>
+          </div>
+
+          {/* AI Image Agent */}
+          <div className="bg-indigo-900 rounded-2xl p-6 text-white shadow-lg border border-indigo-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ImageIcon size={20} className="text-indigo-300" />
+                <h3 className="font-semibold">AI Image Agent</h3>
+              </div>
+              <button 
+                onClick={handleGenerateImage}
+                disabled={isGeneratingImage}
+                className="bg-white text-indigo-900 hover:bg-indigo-50 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isGeneratingImage ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Painting...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    Generate Image
+                  </>
+                )}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-indigo-200/70">
+              Create a stunning, unique featured image based on your post title using generative AI.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-8">
         {/* Main Content Editor */}
@@ -1281,7 +1515,8 @@ function CalendarScreen({
           {calendarDays.map((day, idx) => {
             const dayStr = format(day, 'yyyy-MM-dd');
             const dayPosts = posts.filter(p => {
-              const postDateStr = p.scheduledAt || format(parseISO(p.createdAt), 'yyyy-MM-dd');
+              const createdAt = p.createdAt || new Date().toISOString();
+              const postDateStr = p.scheduledAt || format(parseISO(createdAt), 'yyyy-MM-dd');
               return postDateStr === dayStr;
             });
 
@@ -1318,9 +1553,9 @@ function CalendarScreen({
                           ? "bg-emerald-50 text-emerald-700 border-emerald-100" 
                           : "bg-amber-50 text-amber-700 border-amber-100"
                       )}
-                      title={post.title}
+                      title={post.title || 'Untitled Post'}
                     >
-                      {post.title}
+                      {post.title || 'Untitled Post'}
                     </div>
                   ))}
                 </div>
@@ -1329,6 +1564,147 @@ function CalendarScreen({
           })}
         </div>
       </div>
+    </motion.div>
+  );
+}
+
+function AIGeneratorScreen({ categories, onAccept }: { categories: string[], onAccept: (post: any) => void }) {
+  const [prompt, setPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedPost, setGeneratedPost] = useState<any>(null);
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return;
+    setIsGenerating(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Generate a high-quality, SEO-friendly blog post based on this prompt: "${prompt}".
+        
+        Requirements:
+        1. Use proper HTML structure with H1, H2, and H3 headers for SEO.
+        2. Content should be informative and engaging.
+        3. Include lists and bold text where appropriate.
+        
+        Return a JSON object with:
+        - title: Catchy SEO title
+        - content: Full HTML content
+        - category: One of [${categories.join(', ')}]
+        - tags: Array of 3-5 relevant tags`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              content: { type: Type.STRING },
+              category: { type: Type.STRING },
+              tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["title", "content", "category", "tags"]
+          }
+        }
+      });
+
+      const data = JSON.parse(response.text || '{}');
+      setGeneratedPost(data);
+    } catch (error) {
+      console.error("AI Generation failed:", error);
+      alert("Failed to generate content.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="max-w-4xl mx-auto space-y-8"
+    >
+      <div className="text-center space-y-4">
+        <div className="inline-flex p-3 bg-indigo-100 text-indigo-600 rounded-2xl mb-2">
+          <Sparkles size={32} />
+        </div>
+        <h2 className="text-3xl font-bold text-slate-900">AI Post Generator</h2>
+        <p className="text-slate-500 max-w-lg mx-auto">
+          Describe your topic and let our AI agent craft a high-quality, SEO-optimized blog post for you.
+        </p>
+      </div>
+
+      <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 space-y-6">
+        <div className="space-y-3">
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">What should we write about?</label>
+          <textarea 
+            className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all min-h-[120px] resize-none"
+            placeholder="e.g. A comprehensive guide to sustainable gardening in urban environments..."
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+          />
+        </div>
+        <button 
+          onClick={handleGenerate}
+          disabled={isGenerating || !prompt.trim()}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 size={24} className="animate-spin" />
+              Crafting your story...
+            </>
+          ) : (
+            <>
+              <Sparkles size={24} />
+              Generate Post
+            </>
+          )}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {generatedPost && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden"
+          >
+            <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900">Content Ready</h3>
+                  <p className="text-xs text-slate-500">Review the generated draft below.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => onAccept(generatedPost)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-emerald-100 transition-all"
+              >
+                Accept & Create Post
+              </button>
+            </div>
+            <div className="p-10 prose prose-slate max-w-none">
+              <h1 className="text-4xl font-black text-slate-900 mb-8 leading-tight">{generatedPost.title}</h1>
+              <div dangerouslySetInnerHTML={{ __html: generatedPost.content }} />
+              <div className="mt-12 pt-8 border-t border-slate-100 flex flex-wrap gap-4">
+                <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl text-xs font-bold text-slate-600">
+                  <Tags size={14} />
+                  {generatedPost.category}
+                </div>
+                {generatedPost.tags.map((tag: string) => (
+                  <span key={tag} className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
