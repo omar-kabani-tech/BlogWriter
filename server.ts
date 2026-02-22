@@ -72,6 +72,27 @@ async function startServer() {
     }
   });
 
+  app.put("/api/auth/profile", (req, res) => {
+    const { id, name, email } = req.body;
+    
+    try {
+      const stmt = db.prepare("UPDATE users SET name = ?, email = ? WHERE id = ?");
+      const result = stmt.run(name, email, id);
+      
+      if (result.changes > 0) {
+        res.json({ success: true, user: { id, name, email } });
+      } else {
+        res.status(404).json({ error: "User not found" });
+      }
+    } catch (error: any) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        res.status(400).json({ error: "Email already exists" });
+      } else {
+        res.status(500).json({ error: "Failed to update profile" });
+      }
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
