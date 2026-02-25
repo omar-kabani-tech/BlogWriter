@@ -32,7 +32,8 @@ import {
   Mail,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -1289,6 +1290,39 @@ function PostFormScreen({
     }
   };
 
+  const handleDownloadImage = async () => {
+    if (!featuredImage) return;
+    
+    try {
+      // If it's already a data URL (base64), we can just download it directly
+      if (featuredImage.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = featuredImage;
+        link.download = `blog-image-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // If it's an external URL, fetch it as a blob to bypass browser "open in new tab" behavior
+      const response = await fetch(featuredImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `blog-image-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback: try opening in new tab if fetch fails (CORS)
+      window.open(featuredImage, '_blank');
+    }
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -1407,12 +1441,22 @@ function PostFormScreen({
           {isPreview ? (
             <div className="p-8 prose prose-slate max-w-none">
               {featuredImage && (
-                <img 
-                  src={featuredImage} 
-                  alt="Featured" 
-                  className="w-full h-64 object-cover rounded-xl mb-8"
-                  referrerPolicy="no-referrer"
-                />
+                <div className="relative group mb-8">
+                  <img 
+                    src={featuredImage} 
+                    alt="Featured" 
+                    className="w-full h-64 object-cover rounded-xl"
+                    referrerPolicy="no-referrer"
+                  />
+                  <button 
+                    onClick={handleDownloadImage}
+                    className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm text-slate-900 p-2.5 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-white flex items-center gap-2 text-xs font-bold"
+                    title="Download Image"
+                  >
+                    <Download size={16} />
+                    Download
+                  </button>
+                </div>
               )}
               <h1 className="text-3xl font-bold mb-6">{title || 'Untitled Post'}</h1>
               <div dangerouslySetInnerHTML={{ __html: content }} />
@@ -1435,6 +1479,13 @@ function PostFormScreen({
                         Change Image
                         <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                       </label>
+                      <button 
+                        onClick={handleDownloadImage}
+                        className="bg-white text-slate-900 p-2 rounded-lg hover:bg-slate-50 transition-colors"
+                        title="Download Image"
+                      >
+                        <Download size={18} />
+                      </button>
                       <button 
                         onClick={() => setFeaturedImage(undefined)}
                         className="bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition-colors"
