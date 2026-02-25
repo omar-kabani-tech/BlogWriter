@@ -631,7 +631,7 @@ export default function App() {
   );
 }
 
-function FeedbackScreen({ user }: { user: { id: string } }) {
+function FeedbackScreen({ user }: { user: { id: string, name: string, email: string } }) {
   const [type, setType] = useState<'bug' | 'feature' | 'general'>('general');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -652,6 +652,22 @@ function FeedbackScreen({ user }: { user: { id: string } }) {
         }]);
 
       if (error) throw error;
+      
+      // Send email notification via backend
+      try {
+        await fetch('/api/feedback/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userName: user.name,
+            userEmail: user.email,
+            type,
+            message
+          })
+        });
+      } catch (notifyError) {
+        console.warn('Failed to send notification email, but feedback was saved:', notifyError);
+      }
       
       setSubmitted(true);
       setMessage('');

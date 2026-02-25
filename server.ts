@@ -1,40 +1,16 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
+import { Resend } from 'resend';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("blog.db");
-
-// Initialize database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS posts (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    status TEXT NOT NULL,
-    category TEXT,
-    tags TEXT,
-    featured_image TEXT,
-    seo_data TEXT,
-    scheduled_at TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
-`);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 async function startServer() {
   const app = express();
@@ -42,54 +18,40 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Auth Routes
-  app.post("/api/auth/signup", (req, res) => {
-    const { name, email, password } = req.body;
-    const id = Math.random().toString(36).substring(2, 15);
-    
-    try {
-      const stmt = db.prepare("INSERT INTO users (id, name, email, password) VALUES (?, ?, ?, ?)");
-      stmt.run(id, name, email, password);
-      res.json({ success: true, user: { id, name, email } });
-    } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        res.status(400).json({ error: "Email already exists" });
-      } else {
-        res.status(500).json({ error: "Failed to create user" });
-      }
-    }
-  });
+  // Feedback Notification Route
+  app.post("/api/feedback/notify", async (req, res) => {
+    const { userName, userEmail, type, message } = req.body;
+    const notificationEmail = process.env.NOTIFICATION_EMAIL;
 
-  app.post("/api/auth/login", (req, res) => {
-    const { email, password } = req.body;
-    
-    const user = db.prepare("SELECT * FROM users WHERE email = ? AND password = ?").get(email, password) as any;
-    
-    if (user) {
-      res.json({ success: true, user: { id: user.id, name: user.name, email: user.email } });
-    } else {
-      res.status(401).json({ error: "Invalid credentials" });
+    if (!resend) {
+      console.warn("Resend API key missing. Notification not sent.");
+      return res.status(200).json({ success: true, message: "Notification skipped (no API key)" });
     }
-  });
 
-  app.put("/api/auth/profile", (req, res) => {
-    const { id, name, email } = req.body;
-    
+    if (!notificationEmail) {
+      console.warn("NOTIFICATION_EMAIL missing. Notification not sent.");
+      return res.status(200).json({ success: true, message: "Notification skipped (no target email)" });
+    }
+
     try {
-      const stmt = db.prepare("UPDATE users SET name = ?, email = ? WHERE id = ?");
-      const result = stmt.run(name, email, id);
-      
-      if (result.changes > 0) {
-        res.json({ success: true, user: { id, name, email } });
-      } else {
-        res.status(404).json({ error: "User not found" });
-      }
-    } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        res.status(400).json({ error: "Email already exists" });
-      } else {
-        res.status(500).json({ error: "Failed to update profile" });
-      }
+      await resend.emails.send({
+        from: 'Softrify Feedback <onboarding@resend.dev>',
+        to: notificationEmail,
+        subject: `New Feedback: ${type.toUpperCase()} from ${userName}`,
+        html: `
+          <h3>New Feedback Received</h3>
+          <p><strong>User:</strong> ${userName} (${userEmail})</p>
+          <p><strong>Type:</strong> ${type}</p>
+          <p><strong>Message:</strong></p>
+          <div style="padding: 15px; background: #f5f5f5; border-radius: 8px;">
+            ${message.replace(/\n/g, '<br/>')}
+          </div>
+        `
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to send email:", error);
+      res.status(500).json({ error: "Failed to send notification" });
     }
   });
 
