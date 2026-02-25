@@ -69,6 +69,8 @@ import {
   Code
 } from 'lucide-react';
 import { BlogPost, Screen, PostStatus } from './types';
+import { supabase } from './lib/supabase';
+import { useEffect } from 'react';
 
 const SoftrifyLogo = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
   <svg 
@@ -103,52 +105,12 @@ function cn(...inputs: ClassValue[]) {
 
 const INITIAL_CATEGORIES = ['Technology', 'Lifestyle', 'Business', 'Design', 'Marketing'];
 
-// Initial Mock Data
-const INITIAL_POSTS: BlogPost[] = [
-  {
-    id: '1',
-    title: 'The Future of AI in Content Creation',
-    content: '<h1>The Future of AI</h1><p>Artificial intelligence is revolutionizing how we create and consume content. From automated writing assistants to generative art, the landscape is changing rapidly.</p><ul><li>Increased efficiency</li><li>New creative possibilities</li><li>Personalized experiences</li></ul>',
-    status: 'published',
-    category: 'Technology',
-    tags: ['AI', 'Content', 'Future'],
-    featuredImage: 'https://picsum.photos/seed/ai-future/800/400',
-    seo: {
-      metaTitle: 'The Future of AI in Content Creation | Softrify Blog Writer',
-      metaDescription: 'Discover how artificial intelligence is revolutionizing the content creation landscape, from automated writing to generative art.',
-      focusKeyword: 'AI content creation',
-      slug: 'future-of-ai-content-creation'
-    },
-    createdAt: new Date(2024, 1, 15).toISOString(),
-    updatedAt: new Date(2024, 1, 15).toISOString(),
-  },
-  {
-    id: '2',
-    title: '10 Tips for Better Writing',
-    content: '<p>Writing is a skill that can be developed with practice and persistence. Here are some tips to get you started:</p><ol><li>Write every day</li><li>Read extensively</li><li>Edit ruthlessly</li></ol><blockquote>"The first draft is just you telling yourself the story." — Terry Pratchett</blockquote>',
-    status: 'draft',
-    category: 'Lifestyle',
-    tags: ['Writing', 'Tips', 'Creativity'],
-    createdAt: new Date(2024, 1, 18).toISOString(),
-    updatedAt: new Date(2024, 1, 18).toISOString(),
-  },
-  {
-    id: '3',
-    title: 'Understanding React Server Components',
-    content: '<h2>What are RSCs?</h2><p>React Server Components are a new way to build React applications that leverage the server for better performance and developer experience.</p><pre><code>console.log("Hello from the server!");</code></pre>',
-    status: 'published',
-    category: 'Technology',
-    tags: ['React', 'Web Dev', 'Frontend'],
-    createdAt: new Date(2024, 1, 20).toISOString(),
-    updatedAt: new Date(2024, 1, 20).toISOString(),
-  }
-];
-
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<{ id: string, name: string, email: string } | null>(null);
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
-  const [posts, setPosts] = useState<BlogPost[]>(INITIAL_POSTS);
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | PostStatus>('all');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -157,6 +119,106 @@ export default function App() {
   const [dateRange, setDateRange] = useState<{ start: string, end: string }>({ start: '', end: '' });
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Auth Listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setIsAuthenticated(true);
+        fetchProfile(session.user.id, session.user);
+      } else {
+        setIsLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setIsAuthenticated(true);
+        fetchProfile(session.user.id, session.user);
+      } else {
+        setIsAuthenticated(false);
+        setUser(null);
+        setPosts([]);
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchProfile = async (userId: string, authUser?: any) => {
+    try {
+      // 1. If we already have the authUser object, use it for immediate UI update
+      if (authUser) {
+        setUser({ 
+          id: authUser.id, 
+          name: authUser.user_metadata?.name || 'New User', 
+          email: authUser.email || '' 
+        });
+      }
+
+      // 2. Try to get the latest profile from the database
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (profile) {
+        setUser({ id: profile.id, name: profile.name, email: profile.email });
+      } else if (!authUser) {
+        // 3. If no profile record and no authUser passed, fetch it
+        const { data: { user: fetchedUser } } = await supabase.auth.getUser();
+        if (fetchedUser) {
+          setUser({ 
+            id: fetchedUser.id, 
+            name: fetchedUser.user_metadata?.name || 'New User', 
+            email: fetchedUser.email || '' 
+          });
+        }
+      }
+      fetchPosts(userId);
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+      setIsLoading(false);
+    }
+  };
+
+  const fetchPosts = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (data) {
+        const mappedPosts: BlogPost[] = data.map(p => ({
+          id: p.id,
+          title: p.title,
+          content: p.content,
+          status: p.status as PostStatus,
+          category: p.category,
+          tags: p.tags || [],
+          featuredImage: p.featured_image,
+          seo: {
+            metaTitle: p.meta_title || '',
+            metaDescription: p.meta_description || '',
+            focusKeyword: p.focus_keyword || '',
+            slug: p.slug || ''
+          },
+          scheduledAt: p.scheduled_at,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at
+        }));
+        setPosts(mappedPosts);
+      }
+    } catch (err) {
+      console.error('Error fetching posts:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // All unique tags for filter
   const allTags = useMemo(() => {
@@ -178,37 +240,90 @@ export default function App() {
     };
   }, [posts]);
 
-  const handleCreatePost = (newPost: Partial<BlogPost>) => {
-    const post: BlogPost = {
-      id: Math.random().toString(36).substr(2, 9),
+  const handleCreatePost = async (newPost: Partial<BlogPost>) => {
+    if (!user) return;
+
+    const postData = {
+      user_id: user.id,
       title: newPost.title || 'Untitled Post',
       content: newPost.content || '',
       status: (newPost.status as PostStatus) || 'draft',
       category: newPost.category || categories[0] || 'Uncategorized',
       tags: Array.isArray(newPost.tags) ? newPost.tags : [],
-      featuredImage: newPost.featuredImage,
-      seo: newPost.seo || {
-        metaTitle: '',
-        metaDescription: '',
-        focusKeyword: '',
-        slug: ''
-      },
-      scheduledAt: newPost.scheduledAt || format(new Date(), 'yyyy-MM-dd'),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      featured_image: newPost.featuredImage,
+      meta_title: newPost.seo?.metaTitle || '',
+      meta_description: newPost.seo?.metaDescription || '',
+      focus_keyword: newPost.seo?.focusKeyword || '',
+      slug: newPost.seo?.slug || '',
+      scheduled_at: newPost.scheduledAt || format(new Date(), 'yyyy-MM-dd'),
     };
-    setPosts([post, ...posts]);
-    setCurrentScreen('posts');
+
+    const { data, error } = await supabase
+      .from('posts')
+      .insert([postData])
+      .select()
+      .single();
+
+    if (data) {
+      const mappedPost: BlogPost = {
+        id: data.id,
+        title: data.title,
+        content: data.content,
+        status: data.status as PostStatus,
+        category: data.category,
+        tags: data.tags || [],
+        featuredImage: data.featured_image,
+        seo: {
+          metaTitle: data.meta_title || '',
+          metaDescription: data.meta_description || '',
+          focusKeyword: data.focus_keyword || '',
+          slug: data.slug || ''
+        },
+        scheduledAt: data.scheduled_at,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      };
+      setPosts([mappedPost, ...posts]);
+      setCurrentScreen('posts');
+    } else if (error) {
+      console.error('Error creating post:', error);
+      alert('Failed to create post');
+    }
   };
 
-  const handleUpdatePost = (updatedPost: Omit<BlogPost, 'createdAt' | 'updatedAt'>) => {
-    setPosts(posts.map(p => p.id === updatedPost.id ? {
-      ...p,
-      ...updatedPost,
-      updatedAt: new Date().toISOString()
-    } : p));
-    setCurrentScreen('posts');
-    setEditingPostId(null);
+  const handleUpdatePost = async (updatedPost: Omit<BlogPost, 'createdAt' | 'updatedAt'>) => {
+    const postData = {
+      title: updatedPost.title,
+      content: updatedPost.content,
+      status: updatedPost.status,
+      category: updatedPost.category,
+      tags: updatedPost.tags,
+      featured_image: updatedPost.featuredImage,
+      meta_title: updatedPost.seo?.metaTitle,
+      meta_description: updatedPost.seo?.metaDescription,
+      focus_keyword: updatedPost.seo?.focusKeyword,
+      slug: updatedPost.seo?.slug,
+      scheduled_at: updatedPost.scheduledAt,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('posts')
+      .update(postData)
+      .eq('id', updatedPost.id);
+
+    if (!error) {
+      setPosts(posts.map(p => p.id === updatedPost.id ? { 
+        ...p, 
+        ...updatedPost, 
+        updatedAt: postData.updated_at 
+      } : p));
+      setCurrentScreen('posts');
+      setEditingPostId(null);
+    } else {
+      console.error('Error updating post:', error);
+      alert('Failed to update post');
+    }
   };
 
   const handleEditPost = (id: string) => {
@@ -216,11 +331,23 @@ export default function App() {
     setCurrentScreen('edit-post');
   };
 
-  const handleDeletePost = (id: string) => {
-    setPosts(posts.filter(p => p.id !== id));
-    if (currentScreen === 'edit-post') {
-      setCurrentScreen('posts');
-      setEditingPostId(null);
+  const handleDeletePost = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this post?')) return;
+
+    const { error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', id);
+
+    if (!error) {
+      setPosts(posts.filter(p => p.id !== id));
+      if (currentScreen === 'edit-post') {
+        setCurrentScreen('posts');
+        setEditingPostId(null);
+      }
+    } else {
+      console.error('Error deleting post:', error);
+      alert('Failed to delete post');
     }
   };
 
@@ -246,11 +373,19 @@ export default function App() {
     return matchesSearch && matchesStatus && matchesCategory && matchesStartDate && matchesEndDate && matchesTags;
   });
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 size={40} className="animate-spin text-indigo-600 mx-auto" />
+          <p className="text-slate-500 font-medium">Loading Softrify...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
-    return <AuthScreen onLogin={(userData) => {
-      setUser(userData);
-      setIsAuthenticated(true);
-    }} />;
+    return <AuthScreen />;
   }
 
   return (
@@ -355,9 +490,9 @@ export default function App() {
               <User size={20} className="text-slate-500" />
             </div>
             {!isSidebarCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 truncate">{user?.name || 'Alex Writer'}</p>
-                <p className="text-xs text-slate-500 truncate">{user?.email || 'Editor-in-Chief'}</p>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-bold text-slate-900 truncate">{user?.name || 'User'}</p>
+                <p className="text-[10px] text-slate-500 truncate">{user?.email}</p>
               </div>
             )}
           </div>
@@ -474,8 +609,8 @@ export default function App() {
                 }}
               />
             )}
-            {currentScreen === 'feedback' && (
-              <FeedbackScreen />
+            {currentScreen === 'feedback' && user && (
+              <FeedbackScreen user={user} />
             )}
             {currentScreen === 'profile' && user && (
               <ProfileScreen 
@@ -484,7 +619,9 @@ export default function App() {
                 onUpdate={(updatedUser) => {
                   setUser(updatedUser);
                 }}
-                onLogout={() => setIsAuthenticated(false)}
+                onLogout={async () => {
+                  await supabase.auth.signOut();
+                }}
               />
             )}
           </AnimatePresence>
@@ -494,7 +631,7 @@ export default function App() {
   );
 }
 
-function FeedbackScreen() {
+function FeedbackScreen({ user }: { user: { id: string } }) {
   const [type, setType] = useState<'bug' | 'feature' | 'general'>('general');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -502,14 +639,28 @@ function FeedbackScreen() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!message.trim() || !user) return;
     
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSubmitting(false);
-    setSubmitted(true);
-    setMessage('');
+    try {
+      const { error } = await supabase
+        .from('feedback')
+        .insert([{
+          user_id: user.id,
+          type,
+          message
+        }]);
+
+      if (error) throw error;
+      
+      setSubmitted(true);
+      setMessage('');
+    } catch (err) {
+      console.error('Error submitting feedback:', err);
+      alert('Failed to submit feedback');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -632,22 +783,17 @@ function ProfileScreen({ user, onUpdate, onLogout }: {
     setSuccess(false);
 
     try {
-      const response = await fetch('/api/auth/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: user.id, name, email }),
-      });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ name, email })
+        .eq('id', user.id);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        onUpdate(data.user);
-        setSuccess(true);
-      } else {
-        setError(data.error || 'Failed to update profile');
-      }
-    } catch (err) {
-      setError('Connection error. Please try again.');
+      if (error) throw error;
+      
+      onUpdate({ ...user, name, email });
+      setSuccess(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update profile');
     } finally {
       setIsLoading(false);
     }
@@ -749,7 +895,7 @@ function ProfileScreen({ user, onUpdate, onLogout }: {
   );
 }
 
-function AuthScreen({ onLogin }: { onLogin: (user: any) => void }) {
+function AuthScreen() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -764,24 +910,32 @@ function AuthScreen({ onLogin }: { onLogin: (user: any) => void }) {
     setError('');
     
     try {
-      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
-      const body = isLogin ? { email, password } : { name, email, password };
-      
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        onLogin(data.user);
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
       } else {
-        setError(data.error || 'Authentication failed');
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name: name
+            }
+          }
+        });
+        
+        if (signUpError) throw signUpError;
+        
+        // Note: Profile is now created automatically by the DB trigger
+        if (isLogin === false) {
+          alert('Check your email for the confirmation link!');
+        }
       }
-    } catch (err) {
-      setError('Connection error. Please try again.');
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed');
     } finally {
       setIsLoading(false);
     }
