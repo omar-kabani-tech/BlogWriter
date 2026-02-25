@@ -69,6 +69,33 @@ import {
 } from 'lucide-react';
 import { BlogPost, Screen, PostStatus } from './types';
 
+const SoftrifyLogo = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+  >
+    <path 
+      d="M12 2L4 6V18L12 22L20 18V6L12 2Z" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+      className="opacity-20"
+    />
+    <path 
+      d="M16 8.5C16 8.5 15 7 12 7C9 7 8 8.5 8 10C8 11.5 9.5 12 12 12C14.5 12 16 12.5 16 14C16 15.5 15 17 12 17C9 17 8 15.5 8 15.5" 
+      stroke="currentColor" 
+      strokeWidth="2.5" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -86,7 +113,7 @@ const INITIAL_POSTS: BlogPost[] = [
     tags: ['AI', 'Content', 'Future'],
     featuredImage: 'https://picsum.photos/seed/ai-future/800/400',
     seo: {
-      metaTitle: 'The Future of AI in Content Creation | BlogWriter AI',
+      metaTitle: 'The Future of AI in Content Creation | Softrify Blog Writer',
       metaDescription: 'Discover how artificial intelligence is revolutionizing the content creation landscape, from automated writing to generative art.',
       focusKeyword: 'AI content creation',
       slug: 'future-of-ai-content-creation'
@@ -237,8 +264,8 @@ export default function App() {
           isSidebarCollapsed && "px-4"
         )}>
           <div className="flex items-center gap-2 overflow-hidden">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex-shrink-0 flex items-center justify-center">
-              <FileEdit className="text-white w-5 h-5" />
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex-shrink-0 flex items-center justify-center text-white">
+              <SoftrifyLogo size={20} />
             </div>
             {!isSidebarCollapsed && (
               <motion.h1 
@@ -246,7 +273,7 @@ export default function App() {
                 animate={{ opacity: 1, x: 0 }}
                 className="font-bold text-xl tracking-tight text-slate-900 whitespace-nowrap"
               >
-                BlogWriter AI
+                Softrify
               </motion.h1>
             )}
           </div>
@@ -636,9 +663,9 @@ function AuthScreen({ onLogin }: { onLogin: (user: any) => void }) {
       >
         <div className="p-8 text-center bg-indigo-600 text-white">
           <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-            <Sparkles size={32} className="text-white" />
+            <SoftrifyLogo size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold">BlogWriter AI</h1>
+          <h1 className="text-2xl font-bold">Softrify</h1>
           <p className="text-indigo-100 text-sm mt-1">
             {isLogin ? 'Welcome back! Please login to your account.' : 'Create an account to start writing.'}
           </p>
@@ -1635,7 +1662,7 @@ function PostFormScreen({
                         {seo.metaTitle || title || 'Untitled Post'}
                       </div>
                       <div className="text-emerald-700 text-xs truncate">
-                        https://blogwriter.ai/{seo.slug || title.toLowerCase().replace(/\s+/g, '-')}
+                        https://softrify.ai/{seo.slug || title.toLowerCase().replace(/\s+/g, '-')}
                       </div>
                       <div className="text-slate-600 text-sm line-clamp-2 leading-relaxed">
                         {seo.metaDescription || 'No description provided yet. Add a meta description to see how it looks in search results.'}
