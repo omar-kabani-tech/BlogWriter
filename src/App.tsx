@@ -322,16 +322,6 @@ export default function App() {
                 <p className="text-xs text-slate-500 truncate">{user?.email || 'Editor-in-Chief'}</p>
               </div>
             )}
-            <button 
-              onClick={() => setIsAuthenticated(false)}
-              className={cn(
-                "p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all",
-                isSidebarCollapsed && "mt-2"
-              )}
-              title="Log Out"
-            >
-              <LogOut size={18} />
-            </button>
           </div>
         </div>
       </aside>
@@ -453,6 +443,7 @@ export default function App() {
                 onUpdate={(updatedUser) => {
                   setUser(updatedUser);
                 }}
+                onLogout={() => setIsAuthenticated(false)}
               />
             )}
           </AnimatePresence>
@@ -462,7 +453,11 @@ export default function App() {
   );
 }
 
-function ProfileScreen({ user, onUpdate }: { user: { id: string, name: string, email: string }, onUpdate: (user: any) => void }) {
+function ProfileScreen({ user, onUpdate, onLogout }: { 
+  user: { id: string, name: string, email: string }, 
+  onUpdate: (user: any) => void,
+  onLogout: () => void 
+}) {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [isLoading, setIsLoading] = useState(false);
@@ -561,7 +556,7 @@ function ProfileScreen({ user, onUpdate }: { user: { id: string, name: string, e
               </div>
             </div>
 
-            <div className="pt-4">
+            <div className="pt-4 flex items-center justify-between">
               <button 
                 type="submit"
                 disabled={isLoading}
@@ -575,6 +570,15 @@ function ProfileScreen({ user, onUpdate }: { user: { id: string, name: string, e
                 ) : (
                   'Save Changes'
                 )}
+              </button>
+
+              <button 
+                type="button"
+                onClick={onLogout}
+                className="flex items-center gap-2 px-6 py-3 text-red-600 font-bold hover:bg-red-50 rounded-xl transition-all"
+              >
+                <LogOut size={18} />
+                Sign Out
               </button>
             </div>
           </form>
