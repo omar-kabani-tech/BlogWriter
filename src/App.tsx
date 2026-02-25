@@ -33,7 +33,8 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Download
+  Download,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -330,6 +331,15 @@ export default function App() {
             onClick={() => setCurrentScreen('ai-generator')} 
             collapsed={isSidebarCollapsed}
           />
+          <div className="pt-4 mt-4 border-t border-slate-100">
+            <NavItem 
+              icon={<MessageSquare size={20} />} 
+              label="Feedback" 
+              active={currentScreen === 'feedback'} 
+              onClick={() => setCurrentScreen('feedback')} 
+              collapsed={isSidebarCollapsed}
+            />
+          </div>
         </nav>
 
         <div className="p-4 border-top border-slate-100">
@@ -464,6 +474,9 @@ export default function App() {
                 }}
               />
             )}
+            {currentScreen === 'feedback' && (
+              <FeedbackScreen />
+            )}
             {currentScreen === 'profile' && user && (
               <ProfileScreen 
                 key="profile"
@@ -478,6 +491,126 @@ export default function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+function FeedbackScreen() {
+  const [type, setType] = useState<'bug' | 'feature' | 'general'>('general');
+  const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim()) return;
+    
+    setIsSubmitting(true);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setIsSubmitting(false);
+    setSubmitted(true);
+    setMessage('');
+  };
+
+  if (submitted) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-xl mx-auto mt-12 text-center space-y-6"
+      >
+        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-100">
+          <CheckCircle2 size={40} />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-slate-900">Thank You!</h2>
+          <p className="text-slate-500">Your feedback has been received. We appreciate your help in making Softrify better.</p>
+        </div>
+        <button 
+          onClick={() => setSubmitted(false)}
+          className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all"
+        >
+          Send More Feedback
+        </button>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="max-w-2xl mx-auto"
+    >
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-8 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+              <MessageSquare size={24} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">Send Feedback</h3>
+              <p className="text-slate-500 text-sm">Help us improve Softrify Blog Writer.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Feedback Type</label>
+              <div className="grid grid-cols-3 gap-3">
+                {(['general', 'bug', 'feature'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setType(t)}
+                    className={cn(
+                      "py-3 px-4 rounded-xl text-sm font-bold border transition-all capitalize",
+                      type === t 
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100" 
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Your Message</label>
+              <textarea 
+                required
+                placeholder="Tell us what's on your mind..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all h-48 resize-none"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+              />
+            </div>
+
+            <button 
+              type="submit"
+              disabled={isSubmitting || !message.trim()}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={18} />
+                  Submit Feedback
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
