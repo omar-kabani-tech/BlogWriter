@@ -1154,14 +1154,6 @@ function AuthScreen() {
               </div>
             </div>
           </div>
-
-          <div className="flex items-center justify-between text-white/50 text-sm">
-            <p>© 2024 Softrify Inc.</p>
-            <div className="flex gap-6">
-              <button className="hover:text-white transition-colors">Privacy</button>
-              <button className="hover:text-white transition-colors">Terms</button>
-            </div>
-          </div>
         </div>
 
         {/* Floating UI Elements for depth */}
