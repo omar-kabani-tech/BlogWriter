@@ -34,7 +34,8 @@ import {
   Eye,
   EyeOff,
   Download,
-  MessageSquare
+  MessageSquare,
+  ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -945,9 +946,8 @@ function AuthScreen() {
         
         if (signUpError) throw signUpError;
         
-        // Note: Profile is now created automatically by the DB trigger
         if (isLogin === false) {
-          alert('Check your email for the confirmation link!');
+          alert('Check your email for the confirmation link (if enabled) or try logging in now!');
         }
       }
     } catch (err: any) {
@@ -958,112 +958,227 @@ function AuthScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden"
-      >
-        <div className="p-8 text-center bg-indigo-600 text-white">
-          <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-            <SoftrifyLogo size={32} className="text-white" />
+    <div className="min-h-screen bg-white flex overflow-hidden">
+      {/* Left Side: Form */}
+      <div className="flex-1 flex flex-col justify-center px-8 sm:px-12 lg:px-24 py-12 relative z-10 bg-white">
+        <div className="max-w-md w-full mx-auto space-y-10">
+          {/* Logo & Header */}
+          <div className="space-y-6">
+            <motion.div 
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-200"
+            >
+              <SoftrifyLogo size={28} />
+            </motion.div>
+            <div className="space-y-2">
+              <h1 className="text-4xl font-black tracking-tight text-slate-900">
+                {isLogin ? 'Welcome back' : 'Start writing'}
+              </h1>
+              <p className="text-slate-500 text-lg">
+                {isLogin 
+                  ? 'Enter your details to access your dashboard.' 
+                  : 'Join Softrify and unleash your creativity.'}
+              </p>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold">Softrify</h1>
-          <p className="text-indigo-100 text-sm mt-1">
-            {isLogin ? 'Welcome back! Please login to your account.' : 'Create an account to start writing.'}
-          </p>
-        </div>
 
-        <div className="p-8">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-medium">
-                {error}
-              </div>
-            )}
-            {!isLogin && (
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <AnimatePresence mode="wait">
+              {error && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-4 bg-red-50 border border-red-100 text-red-600 text-sm rounded-2xl font-medium flex items-center gap-3"
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                  {error}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="space-y-5">
+              {!isLogin && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                  <div className="relative group">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="John Doe"
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white focus:border-indigo-500 transition-all"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Full Name</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
                   <input 
-                    type="text" 
+                    type="email" 
                     required
-                    placeholder="John Doe"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    placeholder="name@example.com"
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white focus:border-indigo-500 transition-all"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
               </div>
-            )}
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Email Address</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input 
-                  type="email" 
-                  required
-                  placeholder="name@example.com"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input 
-                  type={showPassword ? "text" : "password"} 
-                  required
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between ml-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Password</label>
+                  {isLogin && (
+                    <button type="button" className="text-xs font-bold text-indigo-600 hover:text-indigo-700">
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    required
+                    placeholder="••••••••"
+                    className="w-full pl-12 pr-12 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white focus:border-indigo-500 transition-all"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
               </div>
             </div>
 
             <button 
               type="submit"
               disabled={isLoading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold shadow-xl shadow-indigo-100 hover:shadow-indigo-200 transition-all flex items-center justify-center gap-3 disabled:opacity-50 active:scale-[0.98]"
             >
               {isLoading ? (
                 <>
                   <Loader2 size={20} className="animate-spin" />
-                  Please wait...
+                  Processing...
                 </>
               ) : (
-                isLogin ? 'Login to Dashboard' : 'Create Account'
+                <>
+                  <span>{isLogin ? 'Sign in to Dashboard' : 'Create your account'}</span>
+                  <ArrowRight size={20} />
+                </>
               )}
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-            <p className="text-sm text-slate-500">
-              {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
+          {/* Footer Toggle */}
+          <div className="text-center">
+            <p className="text-slate-500 font-medium">
+              {isLogin ? "New to Softrify?" : "Already have an account?"}{' '}
               <button 
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-indigo-600 font-bold hover:text-indigo-700 transition-colors"
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setError('');
+                }}
+                className="text-indigo-600 font-bold hover:text-indigo-700 transition-colors underline underline-offset-4"
               >
-                {isLogin ? 'Sign Up' : 'Login'}
+                {isLogin ? 'Create an account' : 'Sign in instead'}
               </button>
             </p>
           </div>
         </div>
-      </motion.div>
+
+        {/* Decorative background elements */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10 opacity-30">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-50 rounded-full blur-3xl" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-50 rounded-full blur-3xl" />
+        </div>
+      </div>
+
+      {/* Right Side: Visual Content */}
+      <div className="hidden lg:flex lg:flex-1 relative bg-slate-900 overflow-hidden">
+        <div className="absolute inset-0">
+          <img 
+            src="https://picsum.photos/seed/softrify-auth/1920/1080?blur=2" 
+            alt="Background" 
+            className="w-full h-full object-cover opacity-50 scale-105"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/40 to-slate-900/90" />
+        </div>
+
+        <div className="relative z-10 flex flex-col justify-between p-16 w-full">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white border border-white/20">
+              <SoftrifyLogo size={24} />
+            </div>
+            <span className="text-white font-bold text-xl tracking-tight">Softrify</span>
+          </div>
+
+          <div className="space-y-8 max-w-lg">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <h2 className="text-5xl font-black text-white leading-tight">
+                Craft stories that <br />
+                <span className="text-indigo-400">inspire the world.</span>
+              </h2>
+            </motion.div>
+            
+            <div className="grid grid-cols-2 gap-6">
+              <div className="p-6 bg-white/5 backdrop-blur-lg rounded-3xl border border-white/10 space-y-3">
+                <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-400">
+                  <Sparkles size={20} />
+                </div>
+                <h4 className="text-white font-bold">AI Powered</h4>
+                <p className="text-slate-400 text-sm">Generate ideas and content with advanced AI assistance.</p>
+              </div>
+              <div className="p-6 bg-white/5 backdrop-blur-lg rounded-3xl border border-white/10 space-y-3">
+                <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400">
+                  <Globe size={20} />
+                </div>
+                <h4 className="text-white font-bold">SEO Ready</h4>
+                <p className="text-slate-400 text-sm">Built-in tools to help your content rank higher.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-white/50 text-sm">
+            <p>© 2024 Softrify Inc.</p>
+            <div className="flex gap-6">
+              <button className="hover:text-white transition-colors">Privacy</button>
+              <button className="hover:text-white transition-colors">Terms</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Floating UI Elements for depth */}
+        <motion.div 
+          animate={{ y: [0, -20, 0] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-[20%] right-[10%] p-4 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-indigo-500" />
+            <div className="space-y-1">
+              <div className="w-20 h-2 bg-white/20 rounded-full" />
+              <div className="w-12 h-2 bg-white/10 rounded-full" />
+            </div>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }
