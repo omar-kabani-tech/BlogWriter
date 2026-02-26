@@ -52,8 +52,21 @@ import {
   isSameDay, 
   addMonths, 
   subMonths,
-  parseISO
+  parseISO,
+  startOfWeek as startOfWeekFn,
+  subWeeks,
+  isWithinInterval
 } from 'date-fns';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  Legend
+} from 'recharts';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -234,10 +247,36 @@ export default function App() {
 
   // Stats
   const stats = useMemo(() => {
+    // Calculate weekly data for the last 6 weeks
+    const now = new Date();
+    const chartData = [];
+    
+    for (let i = 5; i >= 0; i--) {
+      const weekStart = startOfWeekFn(subWeeks(now, i));
+      const weekEnd = endOfWeek(weekStart);
+      
+      const weekPublished = posts.filter(p => {
+        const date = new Date(p.createdAt || now);
+        return p.status === 'published' && isWithinInterval(date, { start: weekStart, end: weekEnd });
+      }).length;
+      
+      const weekDrafts = posts.filter(p => {
+        const date = new Date(p.createdAt || now);
+        return p.status === 'draft' && isWithinInterval(date, { start: weekStart, end: weekEnd });
+      }).length;
+      
+      chartData.push({
+        name: `Week ${format(weekStart, 'MMM d')}`,
+        published: weekPublished,
+        drafts: weekDrafts,
+      });
+    }
+
     return {
       total: posts.length,
       published: posts.filter(p => p.status === 'published').length,
       drafts: posts.filter(p => p.status === 'draft').length,
+      chartData
     };
   }, [posts]);
 
@@ -324,6 +363,23 @@ export default function App() {
     } else {
       console.error('Error updating post:', error);
       alert('Failed to update post');
+    }
+  };
+
+  const handleReschedule = async (id: string, date: Date) => {
+    const scheduledAt = format(date, 'yyyy-MM-dd');
+    const updatedAt = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('posts')
+      .update({ scheduled_at: scheduledAt, updated_at: updatedAt })
+      .eq('id', id);
+
+    if (!error) {
+      setPosts(posts.map(p => p.id === id ? { ...p, scheduledAt, updatedAt } : p));
+    } else {
+      console.error('Error rescheduling post:', error);
+      alert('Failed to update schedule');
     }
   };
 
@@ -514,16 +570,6 @@ export default function App() {
               {currentScreen === 'calendar' && 'Content Calendar'}
               {currentScreen === 'profile' && 'Profile Settings'}
             </h2>
-            <div className="relative max-w-md w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Search posts..." 
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
           </div>
           <div className="flex items-center gap-4">
             <button 
@@ -545,6 +591,7 @@ export default function App() {
                 stats={stats} 
                 recentPosts={posts.slice(0, 3)} 
                 onEdit={handleEditPost}
+                onViewAll={() => setCurrentScreen('posts')}
               />
             )}
             {currentScreen === 'posts' && (
@@ -595,9 +642,7 @@ export default function App() {
               <CalendarScreen 
                 key="calendar" 
                 posts={posts} 
-                onReschedule={(id, date) => {
-                  setPosts(posts.map(p => p.id === id ? { ...p, scheduledAt: format(date, 'yyyy-MM-dd'), updatedAt: new Date().toISOString() } : p));
-                }}
+                onReschedule={handleReschedule}
                 onEdit={handleEditPost}
               />
             )}
@@ -1117,40 +1162,42 @@ function AuthScreen() {
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/40 to-slate-900/90" />
         </div>
 
-        <div className="relative z-10 flex flex-col justify-between p-16 w-full">
-          <div className="flex items-center gap-3">
+        <div className="relative z-10 flex flex-col p-16 w-full h-full">
+          <div className="flex items-center gap-3 self-start">
             <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white border border-white/20">
               <SoftrifyLogo size={24} />
             </div>
             <span className="text-white font-bold text-xl tracking-tight">Softrify</span>
           </div>
 
-          <div className="space-y-8 max-w-lg">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <h2 className="text-5xl font-black text-white leading-tight">
-                Craft stories that <br />
-                <span className="text-indigo-400">inspire the world.</span>
-              </h2>
-            </motion.div>
-            
-            <div className="grid grid-cols-2 gap-6">
-              <div className="p-6 bg-white/5 backdrop-blur-lg rounded-3xl border border-white/10 space-y-3">
-                <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-400">
-                  <Sparkles size={20} />
+          <div className="flex-1 flex flex-col items-center justify-center text-center space-y-12">
+            <div className="max-w-2xl space-y-12">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <h2 className="text-6xl font-black text-white leading-tight">
+                  Craft stories that <br />
+                  <span className="text-indigo-400">inspire the world.</span>
+                </h2>
+              </motion.div>
+              
+              <div className="grid grid-cols-2 gap-8">
+                <div className="p-8 bg-white/5 backdrop-blur-lg rounded-[2rem] border border-white/10 space-y-4 text-left">
+                  <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-indigo-400">
+                    <Sparkles size={24} />
+                  </div>
+                  <h4 className="text-white text-xl font-bold">AI Powered</h4>
+                  <p className="text-slate-400 text-sm leading-relaxed">Generate ideas and content with advanced AI assistance.</p>
                 </div>
-                <h4 className="text-white font-bold">AI Powered</h4>
-                <p className="text-slate-400 text-sm">Generate ideas and content with advanced AI assistance.</p>
-              </div>
-              <div className="p-6 bg-white/5 backdrop-blur-lg rounded-3xl border border-white/10 space-y-3">
-                <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400">
-                  <Globe size={20} />
+                <div className="p-8 bg-white/5 backdrop-blur-lg rounded-[2rem] border border-white/10 space-y-4 text-left">
+                  <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-emerald-400">
+                    <Globe size={24} />
+                  </div>
+                  <h4 className="text-white text-xl font-bold">SEO Ready</h4>
+                  <p className="text-slate-400 text-sm leading-relaxed">Built-in tools to help your content rank higher.</p>
                 </div>
-                <h4 className="text-white font-bold">SEO Ready</h4>
-                <p className="text-slate-400 text-sm">Built-in tools to help your content rank higher.</p>
               </div>
             </div>
           </div>
@@ -1210,7 +1257,7 @@ function FilterButton({ label, active, onClick }: { label: string, active: boole
   );
 }
 
-function DashboardScreen({ stats, recentPosts, onEdit }: { stats: any, recentPosts: BlogPost[], onEdit: (id: string) => void }) {
+function DashboardScreen({ stats, recentPosts, onEdit, onViewAll }: { stats: any, recentPosts: BlogPost[], onEdit: (id: string) => void, onViewAll: () => void }) {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -1229,10 +1276,68 @@ function DashboardScreen({ stats, recentPosts, onEdit }: { stats: any, recentPos
         <StatCard label="Drafts" value={stats.drafts} icon={<Clock className="text-amber-600" />} color="amber" />
       </div>
 
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="mb-6">
+          <h3 className="font-semibold text-slate-900">Weekly Post Activity</h3>
+          <p className="text-sm text-slate-500">Comparison of published posts vs drafts over the last 6 weeks.</p>
+        </div>
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={stats.chartData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis 
+                dataKey="name" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+                dy={10}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#fff', 
+                  borderRadius: '12px', 
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                }}
+              />
+              <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '20px' }} />
+              <Line 
+                type="monotone" 
+                dataKey="published" 
+                stroke="#10b981" 
+                strokeWidth={3} 
+                dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6, strokeWidth: 0 }}
+                name="Published"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="drafts" 
+                stroke="#f59e0b" 
+                strokeWidth={3} 
+                dot={{ r: 4, fill: '#f59e0b', strokeWidth: 2, stroke: '#fff' }}
+                activeDot={{ r: 6, strokeWidth: 0 }}
+                name="Drafts"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="p-6 border-bottom border-slate-100 flex items-center justify-between">
           <h3 className="font-semibold text-slate-900">Recent Activity</h3>
-          <button className="text-sm text-indigo-600 font-medium hover:text-indigo-700">View all</button>
+          <button 
+            onClick={onViewAll}
+            className="text-sm text-indigo-600 font-medium hover:text-indigo-700"
+          >
+            View all
+          </button>
         </div>
         <div className="divide-y divide-slate-100">
           {recentPosts.map(post => (
@@ -2312,7 +2417,18 @@ function CalendarScreen({
             const dayStr = format(day, 'yyyy-MM-dd');
             const dayPosts = posts.filter(p => {
               const createdAt = p.createdAt || new Date().toISOString();
-              const postDateStr = p.scheduledAt || format(parseISO(createdAt), 'yyyy-MM-dd');
+              const scheduledAt = p.scheduledAt;
+              
+              let postDateStr: string;
+              if (scheduledAt) {
+                // Handle both yyyy-MM-dd and full ISO strings
+                postDateStr = scheduledAt.includes('T') 
+                  ? format(parseISO(scheduledAt), 'yyyy-MM-dd')
+                  : scheduledAt;
+              } else {
+                postDateStr = format(parseISO(createdAt), 'yyyy-MM-dd');
+              }
+              
               return postDateStr === dayStr;
             });
 
